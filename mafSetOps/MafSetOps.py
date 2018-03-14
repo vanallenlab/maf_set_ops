@@ -1,7 +1,7 @@
 import pandas as pd
 import sys
 import os
-
+from pandas.errors import ParserError
 
 class MafSetOps:
     """A class that can be used to compare MAF files using set operations"""
@@ -17,7 +17,7 @@ class MafSetOps:
         )
 
     @staticmethod
-    def intersection(maf_file_1, maf_file_2, output_path=None):
+    def intersection(maf_file_1, maf_file_2, output_path=None, skip_rows=0):
         """Determine which variants are found in both MAF files"""
         intersection_variants = []
 
@@ -27,21 +27,41 @@ class MafSetOps:
         maf_file_lengths = []
 
         sys.stdout.write('Reading from MAF {}\n'.format(maf_files[0]))
-        df = pd.read_csv(maf_files[0], sep='\t', engine='python')
+        df = pd.read_csv(maf_files[0], sep='\t', engine='python', skiprows=skip_rows)
         maf_file_lengths.append(len(df))
         for (idx, maf_row) in df.iterrows():
-            variant_hash = MafSetOps.__get_variant_hash(maf_row)
-            maf_variants[variant_hash] = {'count': 1, 'row': maf_row}
-
-        for other_maf in maf_files[1:]:
-            sys.stdout.write('Reading from MAF {}\n'.format(other_maf))
-            df = pd.read_csv(other_maf, sep='\t', engine='python')
-            maf_file_lengths.append(len(df))
-            for (idx, maf_row) in df.iterrows():
+            try:
                 variant_hash = MafSetOps.__get_variant_hash(maf_row)
-                # If the variant hash is found in
-                if variant_hash in maf_variants.keys():
-                    maf_variants[variant_hash]['count'] += 1
+                maf_variants[variant_hash] = {'count': 1, 'row': maf_row[['Hugo_Symbol',
+                                                                          'Chromosome',
+                                                                          'Start_position',
+                                                                          'End_position',
+                                                                          'Variant_Classification',
+                                                                          'Variant_Type',
+                                                                          'dbSNP_RS',
+                                                                          'Protein_Change',
+                                                                          'Reference_Allele',
+                                                                          'Tumor_Seq_Allele2',
+                                                                          't_alt_count',
+                                                                          't_ref_count']]}
+            except ParserError:
+                sys.stdout("Skipping line {} ({})".format(idx, maf_row))
+
+        for i, other_maf in enumerate(maf_files[1:]):
+            sys.stdout.write('Reading from MAF {}\n'.format(other_maf))
+            df = pd.read_csv(other_maf, sep='\t', engine='python', skiprows=skip_rows)
+            maf_file_lengths.append(len(df))
+            maf_variants_keys = maf_variants.keys()
+            for (idx, maf_row) in df.iterrows():
+                try:
+                    variant_hash = MafSetOps.__get_variant_hash(maf_row)
+                    # If the variant hash is found in
+                    if variant_hash in maf_variants_keys:
+                        maf_variants[variant_hash]['count'] += 1
+                        maf_variants[variant_hash]['row']['t_alt_count_{}'.format(i + 2)] = maf_row['t_alt_count']
+                        maf_variants[variant_hash]['row']['t_ref_count_{}'.format(i + 2)] = maf_row['t_ref_count']
+                except ParserError:
+                    sys.stdout("Skipping line {} ({})".format(idx, maf_row))
 
         for maf_file_name, variant_count in zip(maf_files, maf_file_lengths):
             sys.stdout.write('{} variants in {}\n'.format(variant_count, maf_file_name))

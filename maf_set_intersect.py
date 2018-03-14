@@ -12,14 +12,16 @@ def main():
     parser.add_argument('maf_file_1', metavar='maf_file_1', type=str)
     parser.add_argument('maf_file_2', metavar='maf_file_2', type=str)
     parser.add_argument('output_path', metavar='output_path', type=str)
+    parser.add_argument('--skip_rows', metavar='skip_rows', type=int, default=0)
 
     args = parser.parse_args()
 
     maf_1 = args.maf_file_1
     maf_2 = args.maf_file_2
+    skip_rows=args.skip_rows
     output_path = args.output_path
 
-    MafSetOps.intersection(maf_1, maf_2, output_path=output_path)
+    MafSetOps.intersection(maf_1, maf_2, output_path=output_path, skip_rows=skip_rows)
 
 
 if __name__ == '__main__':
